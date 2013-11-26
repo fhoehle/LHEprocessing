@@ -1,7 +1,59 @@
-import ROOT
-def makeTLorentzVec(idx,vecParts):
+import ROOT,re,numpy
+def makeTLorentzVecOfGenEventInfo(idx,vecParts):
   return ROOT.TLorentzVector(vecParts[idx].x[0],vecParts[idx].x[1],vecParts[idx].x[2],vecParts[idx].x[3])
+def makeTLorentzVecBareLheEvent(idx,vecParts):
+  return ROOT.TLorentzVector(vecParts[idx][6],vecParts[idx][7],vecParts[idx][8],vecParts[idx][9])
+
 ######
+def lheEvents(fileNames):
+  eventblock = False
+  content = ""
+  for filename in fileNames:
+    for line in open(filename):
+      if "<event>" in line:
+          eventblock = True
+          content = ""
+      elif "</event>" in line:
+          eventblock = False
+          content += line
+          yield generateLHEevent(convertedLHE(content))
+      if eventblock:
+          content += line
+  raise StopIteration
+def convertedLHE(bareLHEEvent):
+  return (re.sub('#.*\n','',bareLHEEvent,re.S).strip('<event>\n|<event/>\n')).replace('\t','  ').split('\n')
+def generateLHEevent(converted): 
+  lheEvent = myLHEevent()
+  
+  lheEvent.eventSettings = [ float(v) for v in converted.pop(0).split()]
+  for partCand in converted:
+    tmpPart= numpy.fromstring(partCand,sep=' ')
+    part=myParticle(pdgId=int(tmpPart[0]),px=float(tmpPart[6]),py=float(tmpPart[7]),pz=float(tmpPart[8]),E=float(tmpPart[9]))
+    lheEvent.parts.append(part)
+  return lheEvent
+class myParticle(object):
+  def __init__(self,px=0,py=0,pz=0,E=0,pdgId=0):
+    self.px=px
+    self.py=py
+    self.pz=pz
+    self.E=E
+    self.pdgId=pdgId
+  def SetPxPyPzE(self,px,py,pz,E,pdgId=0):
+    self.px=px
+    self.py=py
+    self.pz=pz
+    self.E=E
+    self.pdgId=pdgId
+  def getTLoretzVec(self):
+    return ROOT.TLorentzVector(self.px,self.py,self.pz,self.E)
+class myLHEevent (object):
+  def __init__(self):
+    self.eventSettings = None
+    self.parts=[]
+class ttbarLheEvent(object):
+  def addPart(self,label,part):
+    self.__dict__[label]=part
+###################
 def readLHEevent(hepupParts):
   vecs = hepupParts.PUP
   firstTopIdx = -1
